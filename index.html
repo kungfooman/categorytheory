@@ -1,0 +1,282 @@
+	<script>
+
+	const call = Function.prototype.call;
+	const slice = call.bind([].slice);
+	const getClassName = call.bind({}.toString);
+	const create = Object.create.bind(Object);
+
+	// A contract that allows anything
+	const any = (x) => x;
+
+	// Contracts for special values
+	const undef = (x) => {
+		if (x !== void 0) { throw new TypeError(`Expected undefined, got ${JSON.stringify(x)}.`); }
+		return x;
+	};
+	const nul = (x) => {
+		if (x !== null) { throw new TypeError(`Expected null, got ${JSON.stringify(x)}.`); }
+		return x;
+	};
+	const nan = (x) => {
+		if (x === x) { throw new TypeError(`Expected NaN, got ${JSON.stringify(x)}.`); }
+		return x;
+	};
+
+	// Creates a contract that tests the [[Class]]
+	// internal property of the object.
+	const classOf = (s) => (v) => {
+	const className = getClassName(v);
+	if (className !== '[object ' + s + ']') {
+	throw new TypeError(`Expected ${s}, got ${className}.`);
+	}
+	return v;
+	};
+
+	const array = classOf('Array');
+	const date = classOf('Date');
+	const regexp = classOf('RegExp');
+	const promise = classOf('Promise');
+
+	const re = r => {
+	regexp(r);
+	return x => {
+	if (!string(x).match(r)) {
+	throw new TypeError(`Expected a matching string, got ${x}.`);
+	}
+	return x;
+	};
+	};
+
+	const promOf = (c) => (x) => {
+	return x.then(c);
+	};
+
+	// Creates a contract for a value of type s
+	const typeOf = (s) => (v) => {
+	const type = typeof v;
+	if (type !== s) {
+	throw new TypeError(`Expected ${s}, got ${type}.`);
+	}
+	return v;
+	};
+
+	const func = typeOf('function'); 
+	const string = typeOf('string');
+	const object = typeOf('object');
+	const boolean = typeOf('boolean');
+	const number = typeOf('number');
+	const symbol = typeOf('symbol');
+
+	// objects = contracts
+	// guarded functions = morphisms
+	
+	// "thats our functor acting on a contract" https://youtu.be/OIVrOlrkMWI?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=289
+	// "a functor can also act on a guarded function"  arrOf(toBool)([0,1,2,3]) == [false, true, true, true]
+	// arrOf(number)([1,2,3])
+	
+	// https://youtu.be/OIVrOlrkMWI?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=344
+	// this is a functor, it acts on both the objects and the morphisms of our category
+	// and produces new objects and new morphisms
+	arrOf = function(c) {
+		return function(a) {
+			return array(a).map(c);
+		}
+	}
+	
+	// this is a morphism?
+	// Any -> Boolean
+	function toBool(any) {
+		return any != false;
+	}
+	
+	
+	function repeat(s) {
+		s = string(s);
+		return string(s + s)
+	}
+	
+	// the maybe functor
+	// "option" in scala
+	// free pointed set in category theory 
+	Maybe = function() {
+		
+	}
+	None = function() {}
+	None.prototype = Object.create( Maybe.prototype ); // None inherits Maybe
+	None.prototype.toString = function() { return "None"; }
+	// none.flatten() == None {}
+	none = new None();
+	
+	Some = function(x) {
+		this.x = x;
+	}
+	Some.prototype = Object.create( Maybe.prototype );
+	Some.prototype.toString = function() { return "Some("+this.x+")"; }
+	
+	// some(none   ).flatten() == None {}
+	// some(some(5)).flatten() == Some {x: 5}
+	some = function(x) { return new Some(x); }
+	
+	// functor
+	// return contract based on c
+	// maybe(repeat)(none)         == None {}
+	// maybe(toBool)(some(0))      == Some {x: false}
+	// maybe(toBool)(some(1))      == Some {x: true }
+	// maybe(repeat)(some("test")) == Some {x: "testtest"}
+	// https://youtu.be/-cVCeDHqpAw?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=500
+	maybe = function(c) {
+		// return a contract
+		
+		// contract expects m 
+		return function(m) {
+			if (m instanceof None) {
+				return m;
+			} else if (m instanceof Some) {
+				return some(c(m.x))
+			} else {
+				throw new TypeError("Expected None or Some(value) ");
+			}
+		
+		}
+	}
+	
+	// maybe(repeat)(some("test")).getOrElse(123) == "testtest"
+	// maybe(repeat)(none        ).getOrElse(123) == 123
+	// https://youtu.be/-cVCeDHqpAw?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=787
+	Maybe.prototype.getOrElse = function(x) {
+		if (this instanceof Some) {
+			return this.x;
+		} else {
+			return x;
+		}
+		
+		
+	}
+	
+	// [x] is called a unit in Category Theory
+	// https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=124
+	arrOfUnit = function(c) {
+		return function(x) {
+			// https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=1141
+			// x = c(x);
+			// return arrOf( c )( [x] );
+			// same as:
+			x = noTimes(arrOf)(c)(x);
+			return once(arrOf)(c)([x]);
+		}
+	}
+	
+	Array.unit = function( x ) {
+		return [x];
+	}
+	
+	// https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=748
+	Maybe.unit = some
+	
+	Array.prototype.flatten = function(c) {
+		if (c === void 0) {
+			c = any;
+		}
+		return arrOfFlatten( c )( this );
+	}
+	Maybe.prototype.flatten = function(c) {
+		if (c === void 0) {
+			c = any;
+		}
+		return maybeFlatten( c )( this );
+	}
+	
+	maybeUnit = function(c) {
+		return function(x) {
+			// same as: https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=1162
+			//x = c(x);
+			//return maybe( c )( some( x ) );
+			x = noTimes(maybe)(c)(x)
+			return once(maybe)(c)(some(x));
+		}
+	}
+	
+	// arrOfFlatten( toBool )( [[0,1,2,3], [4,5]] ) == [false, true, true, true, true, true]
+	arrOfFlatten = function(c) {
+		return function( aax ) {
+			// same as: https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=1172
+			//aax = arrOf( arrOf(c) )( aax ) ; // [[1,2,3],[4,5]]
+			aax = twice(arrOf)(c)(aax);
+			
+			
+			//console.log("axx: ", aax, "c:", c);
+			var result = [], len = aax.length;
+			for (var i = 0; i<len; i++) {
+				//console.log("got in: ", result);
+				result = result.concat( aax[i] )
+			}
+			//console.log("got: ", result);
+			//return arrOf( c )( result );
+			return once(arrOf)(c)(result);
+		}
+	}
+	
+	// maybeFlatten(repeat)( some(some("asd")) ) == Some {x: "asdasdasdasd"}
+	// maybeFlatten(repeat)( some(none       ) ) == None {}
+	// maybeFlatten(repeat)( none              ) == None {}
+	maybeFlatten = function( c ) {
+		return function( mmx ) {
+			// same as: https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=1196
+			//mmx = maybe( maybe( c ) )( mmx )
+			mmx = twice(maybe)(c)(mmx);
+			var result = mmx;
+			if (result instanceof Some) {
+				result = result.x;
+			} /* else if (result instanceof None) {
+				// this is useless, since its the identify function
+				result = result;
+			}
+			*/
+			//return maybe( c )( result );
+			return once(maybe)(c)(result);
+		}
+	}
+	
+	// twice(repeat)( "test" ) == "testtesttesttest"
+	twice = function( functor ) {
+		return function( c ) {
+			return functor( functor( c ) );
+		}
+	}
+	
+	// https://youtu.be/H75k7XXQ6n4?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=1073
+	once = function( functor ) {
+		/*
+		return function( c ) {
+			return functor( c );
+		}
+		*/
+		// same as:
+		return functor;
+	}
+	
+	noTimes = function( functor ) {
+		return function( c ) {
+			return c;
+		}
+	
+	}
+	
+	</script>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
