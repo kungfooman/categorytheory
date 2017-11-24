@@ -1,4 +1,4 @@
-	<script>
+<script>
 
 	const call = Function.prototype.call;
 	const slice = call.bind([].slice);
@@ -262,7 +262,61 @@
 	
 	}
 	
-	</script>
+	// https://youtu.be/8JygH_PVcUE?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX
+	
+	// some(0    ).map(toBool) == Some {x: false   }
+	// some(1    ).map(toBool) == Some {x: true    }
+	// some("asd").map(repeat) == Some {x: "asdasd"}
+	Maybe.prototype.map = function(c) {
+		return maybe(c)(this);
+	}
+	
+	
+	Monad = function() {}
+	Monad.prototype.flatMap = function(c) {
+		return this.map(c).flatten();
+	}
+	// turn Array and Maybe into Monads, so now we have stuff like [].flatMap
+	Array.prototype.__proto__ = Monad.prototype;
+	Maybe.prototype.__proto__ = Monad.prototype;
+	
+	// == [6, 6, 6, 9, 10, 11, 12, 14, 16]
+	xs = [0,1,2]
+	ys = [3,4,5]
+	zs = [6]
+	
+	// == Some {x: 17}
+	xs = some(3);
+	ys = some(4);
+	zs = some(5);
+	
+	// == None {}
+	xs = some(3);
+	ys = none;
+	zs = some(5);
+	
+	// == Some {x: NaN}
+	xs = some(3);
+	ys = some( some(10) );
+	zs = some(5);
+	
+	xs.flatMap(function(x) {
+		return ys.flatMap(function(y) {
+			return zs.map(function(z) {
+				return x * y + z;
+			})
+			// same as:
+			// https://youtu.be/8JygH_PVcUE?list=PLwuUlC2HlHGe7vmItFmrdBLn6p0AS8ALX&t=655
+			//return zs.flatMap(function(z) {
+			//	return Array.unit( x * y + z );
+			//})
+		})
+	})
+	
+	// syntax for scala:
+	// for (x <- xs; y <- ys; z <- zs) { yield(x * y + z) }
+	
+</script>
 	
 	
 	
